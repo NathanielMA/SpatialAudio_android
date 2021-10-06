@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">SpatialAudio</string>
+    <string name="Welcome">Welcome to our Spatial Audio test App!</string>
+    <string name="IP_button_hint">Press me to view your IP address!</string>
+    <string name="hide_IP_button_hint">Press me to hide your IP address!</string>
+    <string name="IP_button">IP</string>
+    <string name="your_IP">Your IP address is:</string>
+    <string name="hide_IP_button">Hide IP</string>
+    <string name="hidden">hidden</string>
+    <string name="audio_Port">Port: </string>
+    <string name="audio_Port_connection">Enter a desired port</string>
+    <string name="IMUDATA">0</string>
+    <string name="ENTER">Enter</string>
+</resources>
