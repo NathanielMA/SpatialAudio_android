@@ -298,7 +298,6 @@ class MainActivity : AppCompatActivity() {
             override fun run() {
                 while(true) {
                     getRec()
-                    tester()
                 }
             }
 
@@ -307,14 +306,23 @@ class MainActivity : AppCompatActivity() {
                 val packet = DatagramPacket(buffer, buffer.size)
 
                 socketMultiConnect.receive(packet)
+
                 val data = packet.data
-                dataString2 = String(data, 0, data.size)
+                val dataString = String(data, 0, data.size)
+
+                when {
+                    """(?<=OP REQUEST: )""".toRegex().containsMatchIn(dataString) -> {
+
+                        tester(dataString)
+
+                    }
+                }
 
             }
 
-            fun tester() {
+            fun tester(dS: String) {
                 runOnUiThread{
-                    recText.text = dataString2
+                    recText.text = dS
                 }
             }
         }
