@@ -11,4 +11,10 @@
     <string name="audio_Port_connection">Enter a desired port</string>
     <string name="IMUDATA">0</string>
     <string name="ENTER">Enter</string>
+    <string name="Longitude">Longitude:</string>
+    <string name="Latitude">Latitude:</string>
+    <string name="Nose">Nose:</string>
+    <string name="IP">IP:</string>
+    <string name="Audio_Port">Port:</string>
+    <string name="active">Active:</string>
 </resources>
