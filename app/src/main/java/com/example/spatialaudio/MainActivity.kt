@@ -15,6 +15,9 @@ import android.widget.TextView
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.*
+import java.util.*
+import kotlin.ConcurrentModificationException
+import kotlin.concurrent.timerTask
 import kotlin.properties.Delegates
 import com.example.spatialaudio.functions.SpatialFun as s
 
@@ -27,8 +30,7 @@ import com.example.spatialaudio.functions.SpatialFun as s
  * Note:
  *      offset, activeTime, isActive are used for dynamic port removal
  */
-data class opInfo(var OperatorName: String, var OperatorPort: String = "") {
-    var OperatorIP: String = ""
+data class opInfo(var OperatorIP: String, var OperatorPort: String = "") {
     var OperatorLongitude: Double = 0.0
     var OperatorLatitude: Double = 0.0
     var OperatorNose: Double = 0.0
@@ -70,7 +72,6 @@ var IMUPort: Int = 0
  */
 var notified: Boolean = false
 
-lateinit var _self: opInfo
 /**
  * This String is used to display information for connecting Hyper IMU if it is not running
  */
@@ -87,11 +88,6 @@ lateinit var infoString: String
  * Hyper IMU socket
  */
 private var IMUSocket: DatagramSocket = DatagramSocket(9001)
-
-/**
- * Port in which strings are sent over
- */
-private lateinit var stringSocket: DatagramSocket
 
 /**
  *  Multicast Socket on port 8010
@@ -131,7 +127,7 @@ private val socketSendAudio = DatagramSocket()
 /**
  * Audio port of self. Ranging from set Port -> Port + 7.
  */
-var portAudio = 0
+var portAudio = 7777
 
 /**
  * Placeholder for delegating operator ports for sending audio
@@ -251,6 +247,8 @@ var Latitude: Double = 0.0
 var Nose: Double = 0.0
 var dataString: String = ""
 var dataString2: String = ""
+val portString = 8000
+val socketMulti = 8010
 
 class MainActivity : AppCompatActivity() {
     lateinit var buttonIP: Button
@@ -261,7 +259,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var IMU: TextView
     lateinit var audioPort: TextView
     lateinit var ENTER_button: TextView
-    lateinit var recText: TextView
+    lateinit var StringRecText: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -269,13 +267,16 @@ class MainActivity : AppCompatActivity() {
         val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         hostAdd = Formatter.formatIpAddress(wifiManager.connectionInfo.ipAddress)
 
-        socketMultiConnect = MulticastSocket(8000)
+        val self = opInfo (OperatorIP = hostAdd.toString())
+
+        socketMultiConnect = MulticastSocket(socketMulti)
+        val stringSocket = DatagramSocket(portString)
         socketMultiConnect.joinGroup(InetSocketAddress("230.0.0.0", 8000), null)
 
-        buttonIP = findViewById(R.id.IP_button)
+        buttonIP = findViewById(R.id.IP_button)                 //IP Address
         hideButtonIP = findViewById(R.id.hide_IP_button)
 
-        textViewIP = findViewById(R.id.IP_address_textView)
+        textViewIP = findViewById(R.id.IP_address_textView)     //IP Address Textview
         textViewIPConst = findViewById(R.id.IP_textView)
 
         editTextAudio = findViewById(R.id.audio_Port_editText)
@@ -283,141 +284,356 @@ class MainActivity : AppCompatActivity() {
         IMU = findViewById(R.id.IMU_text)
         audioPort = findViewById(R.id.audio_port_textView)
 
-        recText = findViewById(R.id.recText)
+        StringRecText = findViewById(R.id.recText)
 
-        buttonIP.setOnClickListener { revealIP(hostAdd) }
+        buttonIP.setOnClickListener { revealIP(self) }
         hideButtonIP.setOnClickListener { hideIP(it) }
         ENTER_button.setOnClickListener{ setAudioPort(it) }
 
-        RecThread()
-        AzimuthThread()
-        sendThread()
+        ConnectThread(self, socketMulti.toString())
+        SendStringThread(self, portString, stringSocket)
+        ConnectRecThread(self)
     }
 
-    private fun RecThread() {
+    //Generic set-up for threads
+//    private fun thread() {
+//        class changeme : Thread() {
+//            override fun run() {
+//                while (true) {
+//                    TODO()
+//                }
+//            }
+//        }
+//        fun changeMe(){
+//            TODO()
+//        }
+//        val thread = Thread(changeme())
+//        thread.start()
+//    }
 
-        class sampleRec : Thread() {
+
+    //sendRequest
+    /**
+     * setup statements to prevent the sending of strings without a proper port set
+     */
+    private fun ConnectThread(_self: opInfo, portConnect: String) {
+        class _connectTread : Thread() {
             override fun run() {
-                while(true) {
-                    getRec()
+                while (true) {
+                    // Initialize first operator (self) on server
+                    sleep(1000)
+                    if(timeOutOp) {
+                        sleep(1000)
+                        if (addresses.isNullOrEmpty()) {
+                            /** Send own information over server
+                             * This is used until at least one operator joins
+                             */
+                            val dataString = "OP REQUEST: IP: $hostAdd PORT_AUDIO: $portAudio"
+
+                            val datagramPacket = DatagramPacket(
+                                dataString.toByteArray(),
+                                dataString.toByteArray().size,
+                                InetAddress.getByName("230.0.0.0"),
+                                portConnect.toInt()
+                            )
+
+                            socketMultiConnect.send(datagramPacket)
+
+                            //Set own port and Add own port to list of operators
+                            portsAudio.add(portAudio.toString())
+                            _self.OperatorPort = portAudio.toString()
+                            allocatePort(hostAdd.toString(), portAudio.toString())
+                            selfAdded = true
+                            _self.isActive = true // Will always be true
+//                            notifyMe()
+                        }
+                    } else if (opDetected && selfAdded && !timeOutOp) {
+                        /** Send all operator information over server
+                         * This is used until all operators leave the server
+                         */
+                        val dataString =
+                            "OP REQUEST: IP: $hostAdd PORT_AUDIO: $portAudio PORTS_CONNECTED: $portsAudio"
+                        val datagramPacket = DatagramPacket(
+                            dataString.toByteArray(),
+                            dataString.toByteArray().size,
+                            InetAddress.getByName("230.0.0.0"),
+                            portConnect.toInt()
+                        )
+                        socketMultiConnect.send(datagramPacket)
+                        if(!_self.isActive){
+                            _self.isActive = true
+                        }
+                        opDetected = false
+                        timeOutOp = false
+                    }
                 }
             }
 
-            fun getRec() {
-                val buffer = ByteArray(1024)
-                val packet = DatagramPacket(buffer, buffer.size)
-
-                socketMultiConnect.receive(packet)
-
-                val data = packet.data
-                val dataString = String(data, 0, data.size)
-
-                when {
-                    """(?<=OP REQUEST: )""".toRegex().containsMatchIn(dataString) -> {
-
-                        val op = """(?<=IP: )(\d+).(\d+).(\d+).(\d+)""".toRegex().find(dataString)?.value.toString()
-
-                        if(op == hostAdd) {
-                            tester("Nope")
-                        } else {
-                            tester(dataString)
+            fun allocatePort(IP: String, Port: String){
+                for(i in potentialOP.indices) {
+                    when (Port.toInt()) {
+                        incPort + i -> {
+                            operators[potentialOP[i]] = opInfo(OperatorIP = IP)
+                            operators[potentialOP[i]]?.OperatorPort = Port
                         }
                     }
                 }
-
-            }
-
-            fun tester(dS: String) {
-                runOnUiThread{
-                    recText.text = dS
-                }
             }
         }
 
-        val thread = Thread(sampleRec())
+        val thread = Thread(_connectTread())
         thread.start()
     }
 
-    private fun sendThread() {
-
-        class send : Thread() {
+    //receiveOP
+    private fun ConnectRecThread(_self: opInfo) {
+        class sampleRec : Thread() {
             override fun run() {
-                while(true) {
-                    sendRequest(audioPort.text.toString())
+                val t = Timer()
+                while (true) {
+                    if (!opDetected && !selfAdded || selfAdded && !timeOutOp) {
+                        sleep(100)
+                        t.schedule(timerTask {
+                            timeOutOp = true
+                        }, 5000)
+                    }
+
+                    val buffer = ByteArray(1024)
+                    val response = DatagramPacket(buffer, 1024)
+
+                    socketMultiConnect.receive(response)
+
+                    val data = response.data
+                    val dataString = String(data, 0, data.size)
+
+                    val sample = arrayOf<String>("", "", "", "")
+
+                    when {
+                        """OP REQUEST: """.toRegex()
+                            .containsMatchIn(dataString) -> {
+                            if (!selfAdded) {
+                                t.cancel()
+                                t.purge()
+                            }
+
+                            /* Variables used to store and recognize parsed data from received packets
+                             * Variables will Regex:
+                             *      operator IP, Name, Port and total Ports on server
+                             */
+                            val opIP =
+                                """(\d+)\.(\d+)\.(\d+)\.(\d+)""".toRegex().find(dataString)?.value
+                            val opPort = """(?<=PORT_AUDIO: )\d*""".toRegex()
+                                .find(dataString)?.value.toString()
+                            val opPortR = """\d\d\d\d""".toRegex()
+                            val patt = opPortR.findAll(dataString)
+
+                            if (!addresses.contains(opIP)) { // New operator detected
+                                try {
+                                    if (opIP == _self.OperatorIP) {  // New operator is not self
+                                        var i = 0
+                                        updateTextView(dataString)
+                                        /* Sort through all Ports found
+                                         * Add all ports to portsAudio set
+                                         */
+                                        patt.forEach { f ->
+                                            sample[i] = f.value
+                                            if (sample[i] != "") {
+                                                portsAudio.add(sample[i])
+                                                i++
+                                            }
+                                        }
+
+                                        allocatePort(
+                                            opIP.toString(),
+                                            opPort
+                                        )   // Set operator information
+                                        addresses.add(opIP.toString())                  // Add IP to addresses set
+//                                        notifyMe()
+                                    }
+
+                                    /* Determine whether to take initial Port
+                                     * Will only be used if port initial Port has left server and removed from portsAudio set
+                                     */
+                                    if (!portsAudio.contains(portAudio.toString()) && !selfAdded) {
+                                        portsAudio.add(portAudio.toString())
+                                        _self.OperatorPort = portAudio.toString()
+                                        allocatePort(
+                                            hostAdd.toString(),
+                                            portAudio.toString()
+
+                                        )
+                                        selfAdded = true
+                                    }
+
+                                } catch (e: BindException) { // Catch a Bind exception if portAudio is already bound
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            fun allocatePort(IP: String, Port: String){
+                for(i in potentialOP.indices) {
+                    when (Port.toInt()) {
+                        incPort + i -> {
+                            operators[potentialOP[i]] = opInfo(OperatorIP = IP)
+                            operators[potentialOP[i]]?.OperatorPort = Port
+                        }
+                    }
+                }
+            }
+
+            fun updateTextView(String: String) {
+                runOnUiThread {
+                    StringRecText.text = "$String"
                 }
             }
         }
-
-        val thread = Thread(send())
-        thread.start()
+            val thread = Thread(sampleRec())
+            thread.start()
     }
 
-    fun AzimuthThread() {
-        class azimuthThread: Thread() {
+
+    //sendData
+    private fun SendStringThread(_self: opInfo, portString: Int, stringSocket: DatagramSocket) {
+
+        fun getData(_self: opInfo, IMUSocket: DatagramSocket): List<Double> {
+            val buffer = ByteArray(1024)
+            val packet = DatagramPacket(buffer, buffer.size)
+            IMUSocket.setSoTimeout(5000)
+
+            try {
+                IMUSocket.receive(packet)
+                val message = packet.data
+                dataString = String(message, 0, message.size)
+                val azimuthRegex = """-?(\d+)\.\d+""".toRegex()
+
+                val patt = azimuthRegex.findAll(dataString)
+
+                var i = 0
+
+                patt.forEach { f ->
+                    azimuthData[i] = f.value
+
+                    if (i > 5) {
+                        i = 0
+                    }
+                    i++
+                }
+                try {
+                    Longitude = azimuthData[4].toDouble()
+                    Latitude = azimuthData[3].toDouble()
+                    Nose = azimuthData[0].toDouble()
+                    _self.OperatorLongitude = Longitude
+                    _self.OperatorLatitude = Latitude
+                    _self.OperatorNose = Nose
+                } catch (e: NumberFormatException) {
+
+                    Longitude = 0.0
+                    Latitude = 0.0
+                    Nose = 0.0
+                }
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+
+            return listOf(Longitude, Latitude, Nose)
+        }
+
+        fun updateTextView() {
+            runOnUiThread {
+                IMU.text = "${_self.OperatorLongitude} ${_self.OperatorLatitude} ${_self.OperatorNose}"
+            }
+        }
+
+        class updateFast : Thread(){
             override fun run() {
-                while(true){
-                    AzimuthData()
+                while (true) {
+                    getData(_self, IMUSocket)
                     updateTextView()
                 }
             }
+        }
 
-            fun AzimuthData() {
-                val buffer = ByteArray(1024)
-                val packet = DatagramPacket(buffer, buffer.size)
-                IMUSocket.setSoTimeout(5000)
+        class sendData : Thread() {
+            override fun run() {
+                while (true) {
+                    sleep(2000)
 
-                try {
-                    IMUSocket.receive(packet)
-                    val message = packet.data
-                    dataString = String(message, 0, message.size)
-                    val azimuthRegex = """-?(\d+)\.\d+""".toRegex()
+                    val myData = getData(_self, IMUSocket)
+                    _self.activeTime += 1
 
-                    val patt = azimuthRegex.findAll(dataString)
+                    val time = Date().toString()
+                    val messageTo = "IP-$hostAdd PORT_AUDIO: $portAudio COORDS: $myData--"
+                    val mes1 = (messageTo + time).toByteArray()
 
-                    var i = 0
+                    for(i in 0 until addresses.size){
+                        val request = DatagramPacket(
+                            mes1,
+                            mes1.size,
+                            Inet4Address.getByName(addresses.elementAtOrNull(i)),
+                            portString.toInt())
+                        stringSocket.send(request)
+                    }
 
-                    patt.forEach { f ->
-                        azimuthData[i] = f.value
-
-                        if (i > 5) {
-                            i = 0
+                    try{
+                        for (key in operators.keys) {
+                            if ((_self.activeTime - operators[key]?.activeTime!!) - operators[key]?.offset!! > 1 && operators[key]?.OperatorIP != _self.OperatorIP) {
+                                operators[key]!!.isActive = false
+                                portsAudio.remove(operators[key]!!.OperatorPort)
+                                addresses.remove(operators[key]?.OperatorIP)
+                                operators.remove(key)
+                            }
                         }
-                        i++
+                    } catch (e: ConcurrentModificationException){
+                        TODO()
                     }
-                    try {
-                        Longitude = azimuthData[4].toDouble()
-                        Latitude = azimuthData[3].toDouble()
-                        Nose = azimuthData[0].toDouble()
-//                    _self.OperatorLongitude = Longitude
-//                    _self.OperatorLatitude = Latitude
-//                    _self.OperatorNose = Nose
-                    } catch (e: NumberFormatException) {
-
-                        Longitude = 0.0
-                        Latitude = 0.0
-                        Nose = 0.0
-                    }
-
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                }
-            }
-
-            @SuppressLint("SetTextI18n")
-            fun updateTextView() {
-                runOnUiThread {
-                    IMU.text = "$Longitude $Latitude $Nose"
                 }
             }
         }
 
-        val thread = Thread(azimuthThread())
+        val thread = Thread(sendData())
+        val thread2 = Thread(updateFast())
+        thread.start()
+        thread2.start()
+    }
+
+    //receiveData
+    private fun RecStringThread() {
+        class changeme : Thread() {
+            override fun run() {
+                while (true) {
+                    TODO()
+                }
+            }
+            fun changeMe(){
+                TODO()
+            }
+        }
+        val thread = Thread(changeme())
         thread.start()
     }
 
+    //sendAudio
+    private fun SendThread() {
+        class changeme : Thread() {
+            override fun run() {
+                while (true) {
+                    TODO()
+                }
+            }
+            fun changeMe(){
+                TODO()
+            }
+        }
+        val thread = Thread(changeme())
+        thread.start()
+    }
 
-    private fun revealIP(IP: String){
-        textViewIP.text = IP
+    private fun revealIP(_self: opInfo){
+        textViewIP.text = _self.OperatorIP
     }
 
     private fun hideIP(view: View){
@@ -428,56 +644,4 @@ class MainActivity : AppCompatActivity() {
         audioPort.text = editTextAudio.text
     }
 
-    /**
-     * This FUNCTION sends Operator join requests to all operators on MultiCast network.
-     */
-    fun sendRequest(portConnect: String){
-        // Initialize first operator (self) on server
-        Thread.sleep(1000)
-//        if(timeOutOp) {
-//            Thread.sleep(1000)
-            if (addresses.isNullOrEmpty()) {
-                /** Send own information over server
-                 * This is used until at least one operator joins
-                 */
-                val dataString = "OP REQUEST: IP: $hostAdd " //PORT_AUDIO: $portConnect"
-
-                val datagramPacket = DatagramPacket(dataString.toByteArray(),
-                    dataString.toByteArray().size,
-                InetAddress.getByName("230.0.0.0"),
-                8000)
-
-                socketMultiConnect.send(datagramPacket)
-
-//                //Set own port and Add own port to list of operators
-//                portsAudio.add(portAudio.toString())
-//                _self.OperatorPort = portAudio.toString()
-//
-////                allocatePort(hostName.toString(), portAudio.toString(), hostAdd.toString())
-//
-//                selfAdded = true
-//                _self.isActive = true // Will always be true
-
-//                notifyMe()
-            }
-//        } else if (opDetected && selfAdded && !timeOutOp) {
-//            /** Send all operator information over server
-//             * This is used until all operators leave the server
-//             */
-//            val dataString =
-//                "OP REQUEST: IP: $hostAdd PORT_AUDIO:" // $portAudio PORTS_CONNECTED: $portsAudio"
-//            val datagramPacket = DatagramPacket(
-//                dataString.toByteArray(),
-//                dataString.toByteArray().size
-//            )
-//
-//            socketMultiConnect.send(datagramPacket)
-//
-//            if(!_self.isActive){
-//                _self.isActive = true
-//            }
-//            opDetected = false
-//            timeOutOp = false
-//        }
-    }
 }
