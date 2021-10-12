@@ -1,5 +1,7 @@
 package com.example.spatialaudio
 
+//This is a test to verify GitHub access
+
 import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.net.wifi.WifiManager
@@ -313,8 +315,13 @@ class MainActivity : AppCompatActivity() {
                 when {
                     """(?<=OP REQUEST: )""".toRegex().containsMatchIn(dataString) -> {
 
-                        tester(dataString)
+                        val op = """(?<=IP: )(\d+).(\d+).(\d+).(\d+)""".toRegex().find(dataString)?.value.toString()
 
+                        if(op == hostAdd) {
+                            tester("Nope")
+                        } else {
+                            tester(dataString)
+                        }
                     }
                 }
 
