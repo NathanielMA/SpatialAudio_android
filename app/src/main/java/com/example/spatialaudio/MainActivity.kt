@@ -1,6 +1,8 @@
 package com.example.spatialaudio
 
-//This is a test to verify GitHub access
+//- TODO
+//- Cleanup code after complete integration
+//- Implement fragments
 
 import android.annotation.SuppressLint
 import android.graphics.Path
@@ -8,6 +10,7 @@ import android.media.AudioFormat
 import android.net.wifi.WifiManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
 import android.text.format.Formatter
 import android.view.View
 import android.widget.Button
@@ -16,6 +19,7 @@ import android.widget.TextView
 import org.w3c.dom.Text
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.lang.Exception
 import java.net.*
 import java.util.*
 import kotlin.ConcurrentModificationException
@@ -36,6 +40,7 @@ import com.example.spatialaudio.functions.SpatialFun as s
  *      offset, activeTime, isActive are used for dynamic port removal
  */
 data class opInfo(var OperatorIP: String, var OperatorPort: String = "") {
+    var OperatorName: String = ""
     var OperatorLongitude: Double = 0.0
     var OperatorLatitude: Double = 0.0
     var OperatorNose: Double = 0.0
@@ -66,15 +71,15 @@ var DEMO: Boolean = false
  */
 val portsAudio = mutableSetOf<String>()
 
-/**
- * List of operators connected to server
- */
-var operators = mutableMapOf<String, opInfo>()
+///**
+// * List of operators connected to server
+// */
+//var operators = mutableMapOf<String, opInfo>()
 
-/**
- * List of all potential operators to be contained in data base.
- */
-val potentialOP = listOf<String>("OP1","OP2","OP3","OP4","OP5","OP6","OP7","OP8")
+///**
+// * List of all potential operators to be contained in data base.
+// */
+//val potentialOP = listOf<String>("OP1","OP2","OP3","OP4","OP5","OP6","OP7","OP8")
 
 /**
  * Int variable for storing the designated Hpper IMU port.
@@ -248,24 +253,27 @@ private var numBytesRead: Int = 0
 var hostAdd: String = ""
 //endregion
 
-/**
- * This FUNCTION asks the user to set the initial port on which audio should be received and bases
- * all other operators off of initial port.
- *
- * It also sets the Hyper IMU port required for receiving Hyper IMU data
- */
 
 var azimuthData = arrayOf<String>("","","","","","")
 var Longitude: Double = 0.0
 var Latitude: Double = 0.0
 var Nose: Double = 0.0
-var dataString: String = ""
-var dataString2: String = ""
-val portString = 8000
+val portString = 8020
 val socketMulti = 8010
 var tcanc = 0
 
 class MainActivity : AppCompatActivity() {
+    /**
+     * List of operators connected to server
+     */
+    var operators = mutableMapOf<String, opInfo>()
+
+    /**
+     * List of all potential operators to be contained in data base.
+     */
+    val potentialOP = listOf<String>("OP1","OP2","OP3","OP4","OP5","OP6","OP7","OP8")
+
+    //region TextViews
     lateinit var buttonIP: Button
     lateinit var hideButtonIP: Button
     lateinit var textViewIP: TextView
@@ -290,9 +298,11 @@ class MainActivity : AppCompatActivity() {
     lateinit var Op_Port            : TextView
     lateinit var Op_IP              : TextView
     lateinit var Op_active          : TextView
+    //endregion
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_main)
         val wifiManager = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
         hostAdd = Formatter.formatIpAddress(wifiManager.connectionInfo.ipAddress)
@@ -301,7 +311,7 @@ class MainActivity : AppCompatActivity() {
 
         socketMultiConnect = MulticastSocket(socketMulti)
         val stringSocket = DatagramSocket(portString)
-        socketMultiConnect.joinGroup(InetSocketAddress("230.0.0.0", 8000), null)
+        socketMultiConnect.joinGroup(InetSocketAddress("230.0.0.0", socketMulti), null)
 
         Op_self         = findViewById(R.id.Operator_1)
         Operator        = findViewById(R.id.Operator_2)
@@ -340,8 +350,9 @@ class MainActivity : AppCompatActivity() {
         ENTER_button.setOnClickListener{ setAudioPort(it) }
 
         ConnectThread(self, socketMulti.toString())
-        SendStringThread(self, portString, stringSocket)
+        SendStringThread(self, socketMulti)
         ConnectRecThread(self)
+        RecStringThread(stringSocket, self)
         troubleShoot(self, Op1, Op2)
     }
 
@@ -419,12 +430,13 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            fun allocatePort(IP: String, Port: String){
+            private fun allocatePort(IP: String, Port: String){
                 for(i in potentialOP.indices) {
                     when (Port.toInt()) {
                         incPort + i -> {
                             operators[potentialOP[i]] = opInfo(OperatorIP = IP)
                             operators[potentialOP[i]]?.OperatorPort = Port
+                            operators[potentialOP[i]]?.OperatorName = potentialOP[i]
                         }
                     }
                 }
@@ -438,14 +450,13 @@ class MainActivity : AppCompatActivity() {
     //receiveOP
     private fun ConnectRecThread(_self: opInfo) {
         class sampleRec : Thread() {
+            var timer = Timer()
+
             override fun run() {
-                val t = Timer()
                 while (true) {
                     if (!opDetected && !selfAdded || selfAdded && !timeOutOp) {
                         sleep(100)
-                        t.schedule(timerTask {
-                            timeOutOp = true
-                        }, 5000)
+                        AsynchTaskTimer()
                     }
 
                     val buffer = ByteArray(1024)
@@ -463,8 +474,8 @@ class MainActivity : AppCompatActivity() {
                             .containsMatchIn(dataString) -> {
 
                             if (!selfAdded && tcanc == 0) {
-                                t.cancel()
-                                t.purge()
+                                timer.cancel()
+                                timer.purge()
                                 tcanc = 1
                             }
 
@@ -538,22 +549,10 @@ class MainActivity : AppCompatActivity() {
                                  */
                                 val portsInUse = portsAudio.toList()
                                 if(!selfAdded) {
+
                                     Thread.sleep(100)
-                                    Timer().schedule(timerTask {
-                                        if (portsAudio.contains(portAudio.toString()) && !selfAdded) {
-                                            for (i in 0 until portsAudio.size) {
-                                                if (portsAudio.contains(portAudio.toString())) {
-                                                    portAudio += 1
-                                                } else if ((portAudio - incPort) >= 8){
-                                                    break
-                                                }
-                                            }
-                                            portsAudio.add(portAudio.toString())
-                                            _self.OperatorPort = portAudio.toString()
-                                            allocatePort(hostAdd.toString(), portAudio.toString())
-                                            selfAdded = true
-                                        }
-                                    }, (1000..3000).random().toLong())
+                                    AsynchRandomTaskTimer()
+
                                 }else if (operators.size < portsAudio.size && selfAdded){
                                     for(i in 0 until portsAudio.size) {
                                         removePort(portsInUse[i])
@@ -573,6 +572,7 @@ class MainActivity : AppCompatActivity() {
                         incPort + i -> {
                             operators[potentialOP[i]] = opInfo(OperatorIP = IP)
                             operators[potentialOP[i]]?.OperatorPort = Port
+                            operators[potentialOP[i]]?.OperatorName = potentialOP[i]
                         }
                     }
                 }
@@ -594,6 +594,38 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            fun AsynchRandomTaskTimer() {
+                val timertask: TimerTask = object : TimerTask() {
+                    override fun run() {
+                        if (portsAudio.contains(portAudio.toString()) && !selfAdded) {
+                            for (i in 0 until portsAudio.size) {
+                                if (portsAudio.contains(portAudio.toString())) {
+                                    portAudio += 1
+                                } else if ((portAudio - incPort) >= 8){
+                                    break
+                                }
+                            }
+                            portsAudio.add(portAudio.toString())
+                            _self.OperatorPort = portAudio.toString()
+                            allocatePort(hostAdd.toString(), portAudio.toString())
+                            selfAdded = true
+                        }
+                    }
+                }
+                timer = Timer()
+                timer.schedule(timertask, (1000..3000).random().toLong())
+            }
+
+            fun AsynchTaskTimer() {
+                val timertask: TimerTask = object : TimerTask() {
+                    override fun run() {
+                        timeOutOp = true
+                    }
+                }
+                timer = Timer()
+                timer.schedule(timertask, 5000)
+            }
+
             fun updateTextView(String: String) {
                 runOnUiThread {
                     StringRecText.text = "$String"
@@ -605,7 +637,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     //sendData
-    private fun SendStringThread(_self: opInfo, portString: Int, stringSocket: DatagramSocket) {
+    private fun SendStringThread(_self: opInfo, portConnect: Int) {
+
+        var dataString: String = ""
 
         fun getData(_self: opInfo, IMUSocket: DatagramSocket): List<Double> {
             val buffer = ByteArray(1024)
@@ -674,18 +708,15 @@ class MainActivity : AppCompatActivity() {
                     val myData = getData(_self, IMUSocket)
                     _self.activeTime += 1
 
-                    val time = Date().toString()
-                    val messageTo = "IP-$hostAdd PORT_AUDIO: $portAudio COORDS: $myData--"
-                    val mes1 = (messageTo + time).toByteArray()
+                    val dataString2 = "OP-DATA: IP: $hostAdd PORT_AUDIO: $portAudio COORDS: $myData--"
 
-                    for(i in 0 until addresses.size){
-                        val request = DatagramPacket(
-                            mes1,
-                            mes1.size,
-                            Inet4Address.getByName(addresses.elementAtOrNull(i)),
-                            portString.toInt())
-                        stringSocket.send(request)
-                    }
+                    val datagramPacket = DatagramPacket(
+                        dataString2.toByteArray(),
+                        dataString2.toByteArray().size,
+                        InetAddress.getByName("230.0.0.0"),
+                        portConnect.toInt()
+                    )
+                    socketMultiConnect.send(datagramPacket)
 
                     try{
                         for (key in operators.keys) {
@@ -697,7 +728,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     } catch (e: ConcurrentModificationException){
-                        TODO()
+
                     }
                 }
             }
@@ -712,74 +743,102 @@ class MainActivity : AppCompatActivity() {
     //receiveData
     private fun RecStringThread(stringSocket: DatagramSocket, _self: opInfo) {
         class changeme : Thread() {
+            var timer = Timer()
+
             override fun run() {
                 while (true) {
                     val buffer2 = ByteArray(1024)
                     val response2 = DatagramPacket(buffer2, 1024)
 
-                    stringSocket.receive(response2)
+                    socketMultiConnect.receive(response2)
 
                     val data2 = response2.data
-                    val dataString = String(data2, 0, data2.size)
+                    val dataStringtest = String(data2, 0, data2.size)
 
-                    /** Variables used to store and recognize parsed data from received packets
-                     * Variables will Regex:
-                     *      operator IP, Name, Port and Coordinates
-                     */
-                    val opName = """(?<=OP-)\w+""".toRegex().find(dataString)?.value.toString()
-                    val opIP =
-                        """(?<=IP: )(\d+).(\d+).(\d+).(\d+)""".toRegex().find(dataString)?.value.toString()
-                    val opPort = """(?<=PORT_AUDIO: )\d+""".toRegex().find(dataString)?.value.toString()
-                    val opCoords = """-?(\d+)\.\d+""".toRegex()
-                    val patt = opCoords.findAll(dataString)
+                    when {
+                        """OP-DATA: """.toRegex()
+                            .containsMatchIn(dataStringtest) -> {
+                            /** Variables used to store and recognize parsed data from received packets
+                             * Variables will Regex:
+                             *      operator IP, Name, Port and Coordinates
+                             */
+                            val opIP =
+                                """(?<=IP: )(\d+).(\d+).(\d+).(\d+)""".toRegex()
+                                    .find(dataStringtest)?.value.toString()
 
-                    var i = 0
-                    patt.forEach { f ->
-                        opGPS[i] = f.value
-                        i++
-                    }
+                            if (opIP != _self.OperatorIP) {
 
-                    //Allocate received coordinates to correct operator
-                    allocateCoords(opPort)
+                                updateTextView(dataStringtest)
 
-                    for (key in operators.keys) {
-                        if (operators[key]?.OperatorIP != hostAdd) {
+                                val opPort = """(?<=PORT_AUDIO: )\d+""".toRegex()
+                                    .find(dataStringtest)?.value.toString()
+                                val opCoords = """-?(\d+)\.\d+""".toRegex()
+                                val patt = opCoords.findAll(dataStringtest)
 
-                            // Calculate Azimuth between self and operator
-                            operators[key]?.OperatorAzimuth = AzimuthCalc(
-                                _self.OperatorLongitude,
-                                _self.OperatorLatitude,
-                                operators[key]!!.OperatorLongitude,
-                                operators[key]!!.OperatorLatitude,
-                                _self.OperatorNose
-                            )
+                                var i = 0
+                                patt.forEach { f ->
+                                    opGPS[i] = f.value
+                                    i++
+                                }
 
-                            //Calculate distance between self and operator
-                            operators[key]?.OperatorDistance = OperatorDistance(
-                                _self.OperatorLongitude,
-                                _self.OperatorLatitude,
-                                operators[key]!!.OperatorLongitude,
-                                operators[key]!!.OperatorLatitude
-                            )
-                    }
+                                //Allocate received coordinates to correct operator
+                                allocateCoords(opPort)
 
-                    if (!portsAudio.contains(opPort)) {
-                        if(!opDetected && !operators.containsKey(opPort)){
-                            Timer().schedule(timerTask {
-                                opNotFound = true
-                            }, 5000)
+                                for (key in operators.keys) {
+                                    if (operators[key]?.OperatorIP != hostAdd) {
+
+                                        // Calculate Azimuth between self and operator
+                                        operators[key]?.OperatorAzimuth = AzimuthCalc(
+                                            _self.OperatorLongitude,
+                                            _self.OperatorLatitude,
+                                            operators[key]!!.OperatorLongitude,
+                                            operators[key]!!.OperatorLatitude,
+                                            _self.OperatorNose
+                                        )
+
+                                        //Calculate distance between self and operator
+                                        operators[key]?.OperatorDistance = OperatorDistance(
+                                            _self.OperatorLongitude,
+                                            _self.OperatorLatitude,
+                                            operators[key]!!.OperatorLongitude,
+                                            operators[key]!!.OperatorLatitude
+                                        )
+                                    }
+
+                                    if (!portsAudio.contains(opPort)) {
+                                        if (!opDetected && !operators.containsKey(opPort)) {
+                                            AsynchTaskTimer()
+                                        }
+                                    }
+                                    if (opNotFound) {
+                                        portsAudio.add(opPort)
+                                        addresses.add(opIP)
+                                        allocatePort(opIP, opPort)
+                                        opNotFound = false
+                                    }
+
+                                    operatorTimeOut(opIP)
+                                }
+                            }
                         }
                     }
-                    if (opNotFound){
-                        portsAudio.add(opPort)
-                        addresses.add(opIP)
-                        allocatePort(opIP, opPort)
-                        opNotFound = false
-                    }
+                }
+            }
 
-                    operatorTimeOut(opIP)
+            fun updateTextView(dataStringtest: String) {
+                runOnUiThread() {
+                    IMU.text = dataStringtest
                 }
+            }
+
+            fun AsynchTaskTimer() {
+                val timertask: TimerTask = object : TimerTask() {
+                    override fun run() {
+                        opNotFound = true
+                    }
                 }
+                timer = Timer()
+                timer.schedule(timertask, 5000)
             }
 
             /**
@@ -841,6 +900,7 @@ class MainActivity : AppCompatActivity() {
                         incPort + i -> {
                             operators[potentialOP[i]] = opInfo(OperatorIP = IP)
                             operators[potentialOP[i]]?.OperatorPort = Port
+                            operators[potentialOP[i]]?.OperatorName = potentialOP[i]
                         }
                     }
                 }
@@ -867,6 +927,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     //sendAudio
+    //-TODO
     private fun SendThread() {
         class changeme : Thread() {
             override fun run() {
@@ -887,25 +948,32 @@ class MainActivity : AppCompatActivity() {
 
             fun updateTextView() {
                 runOnUiThread {
-                    for (ops in potentialOP.indices) {
-                        if(operators[potentialOP[ops]]?.OperatorIP == _self.OperatorIP) {
                             op1.Op.text = "Self"
-                            op1.Longitude.text = _self.OperatorLongitude.toString()
-                            op1.Latitude.text = _self.OperatorLatitude.toString()
+                            op1.Longitude.text = operators["OP1"]?.OperatorIP.toString()
+                            op2.Longitude.text = operators["OP2"]?.OperatorIP.toString()
                             op1.Nose.text = _self.OperatorNose.toString()
                             op1.IP.text = _self.OperatorIP
                             op1.Port.text = _self.OperatorPort
                             op1.active.text = _self.isActive.toString()
-                        } else {
-                            op2.Op.text = "Operator 2"
-                            op2.Longitude.text = operators[potentialOP[ops]]?.OperatorLongitude.toString()
-                            op2.Latitude.text = operators[potentialOP[ops]]?.OperatorLatitude.toString()
-                            op2.Nose.text = operators[potentialOP[ops]]?.OperatorNose.toString()
-                            op2.IP.text = operators[potentialOP[ops]]?.OperatorIP
-                            op2.Port.text = operators[potentialOP[ops]]?.OperatorPort
-                            op2.active.text = operators[potentialOP[ops]]?.isActive.toString()
-                        }
-                    }
+//                    for (ops in potentialOP.indices) {
+//                        if(operators[potentialOP[ops]]?.OperatorIP == _self.OperatorIP) {
+//                            op1.Op.text = "Self"
+//                            op1.Longitude.text = timeOutOp.toString()
+//                            op1.Latitude.text = _self.OperatorLatitude.toString()
+//                            op1.Nose.text = _self.OperatorNose.toString()
+//                            op1.IP.text = _self.OperatorIP
+//                            op1.Port.text = _self.OperatorPort
+//                            op1.active.text = _self.isActive.toString()
+//                        } else {
+//                            op2.Op.text = "Operator 2"
+//                            op2.Longitude.text = operators[potentialOP[ops]]?.OperatorLongitude.toString()
+//                            op2.Latitude.text = operators[potentialOP[ops]]?.OperatorLatitude.toString()
+//                            op2.Nose.text = operators[potentialOP[ops]]?.OperatorNose.toString()
+//                            op2.IP.text = operators[potentialOP[ops]]?.OperatorIP
+//                            op2.Port.text = operators[potentialOP[ops]]?.OperatorPort
+//                            op2.active.text = operators[potentialOP[ops]]?.isActive.toString()
+//                        }
+//                    }
                 }
             }
 
@@ -930,7 +998,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setAudioPort(view: View){
-        audioPort.text = editTextAudio.text
+//        audioPort.text = portsAudio.toString()
     }
 
 }
