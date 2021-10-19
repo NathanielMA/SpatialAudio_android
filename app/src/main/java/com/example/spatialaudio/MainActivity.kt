@@ -284,21 +284,11 @@ class MainActivity : AppCompatActivity() {
     lateinit var ENTER_button: TextView
     lateinit var StringRecText: TextView
 
+    lateinit var tester: TextView
     //Troubleshooting TextViews
     lateinit var Op_self            : TextView
     lateinit var Operator           : TextView
-    lateinit var self_Longitude     : TextView
-    lateinit var self_Latitude      : TextView
-    lateinit var self_Nose          : TextView
-    lateinit var self_Port          : TextView
-    lateinit var self_Name        : TextView
-    lateinit var self_IP            : TextView
-    lateinit var Op_Longitude       : TextView
-    lateinit var Op_Latitude        : TextView
-    lateinit var Op_Nose            : TextView
-    lateinit var Op_Port            : TextView
-    lateinit var Op_IP              : TextView
-    lateinit var Op_Name          : TextView
+
     //endregion
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -319,10 +309,12 @@ class MainActivity : AppCompatActivity() {
         var Op1 = troubleshoot(Op = Op_self)
         Op1.Longitude   = findViewById(R.id.Op_1_Long)
         Op1.Latitude    = findViewById(R.id.Op_1_Lat)
-        Op1.Nose        = findViewById(R.id.Op_1_Nose)
+//        Op1.Nose        = findViewById(R.id.Op_1_Nose)
         Op1.IP          = findViewById(R.id.Op_1_IP)
         Op1.Port        = findViewById(R.id.Op_1_Port)
         Op1.Name      = findViewById(R.id.Op_1_Name)
+
+        tester = findViewById(R.id.Op_1_Nose)
 
         var Op2 = troubleshoot(Op = Operator)
         Op2.Longitude   = findViewById(R.id.Op_2_Long)
@@ -349,7 +341,7 @@ class MainActivity : AppCompatActivity() {
         hideButtonIP.setOnClickListener { hideIP(it) }
         ENTER_button.setOnClickListener{ setAudioPort(it) }
 
-        SendStringThread(self, socketMulti, Op1, Op2)
+        SendStringThread(self, socketMulti, Op1, Op2, tester)
     }
 
     //Generic set-up for threads
@@ -369,7 +361,7 @@ class MainActivity : AppCompatActivity() {
 //    }
 
     //sendData
-    private fun SendStringThread(_self: opInfo, portConnect: Int, _op1: troubleshoot, _op2: troubleshoot) {
+    private fun SendStringThread(_self: opInfo, portConnect: Int, _op1: troubleshoot, _op2: troubleshoot, tester: TextView) {
         var timer = Timer()
 
         fun getData(_self: opInfo, IMUSocket: DatagramSocket): List<Double> {
@@ -419,7 +411,7 @@ class MainActivity : AppCompatActivity() {
 
         fun updateTextView0(Longitude: Double, Latitude: Double, Nose: Double) {
             runOnUiThread {
-                IMU.text = Longitude.toString() + " " + Latitude.toString() + " " + Nose.toString()
+//                IMU.text = Longitude.toString() + " " + Latitude.toString() + " " + Nose.toString()
             }
         }
 
@@ -822,7 +814,7 @@ class MainActivity : AppCompatActivity() {
                                 }
 
                                 //Allocate received coordinates to correct operator
-                                allocateCoords(opPort, opGPS[1].toDouble(), opGPS[2].toDouble(), 0.0)
+                                allocateCoords(opPort, opGPS[2].toDouble(), opGPS[3].toDouble(), 0.0)
 
 
                                 for (key in operators.keys) {
@@ -871,10 +863,10 @@ class MainActivity : AppCompatActivity() {
             override fun run() {
                 while (true) {
                     sleep(200)
-                    updateTextView3(_op1, _op2)
+                    updateTextView3(_op1, _op2, tester)
                 }
             }
-            private fun updateTextView3(_op1: troubleshoot, _op2: troubleshoot) {
+            private fun updateTextView3(_op1: troubleshoot, _op2: troubleshoot, tester: TextView) {
                 runOnUiThread {
 //                    _op1.Op.text = "Self"
 //                    _op1.Longitude.text = operators["OP2"]?.OperatorLongitude.toString()
@@ -888,7 +880,7 @@ class MainActivity : AppCompatActivity() {
                         _op1.Op.text = "Self"
                         _op1.Longitude.text = operators[key]?.OperatorLongitude.toString()
                         _op1.Latitude.text = operators[key]?.OperatorLatitude.toString()
-                        _op1.Nose.text = operators[key]?.OperatorNose.toString()
+                        tester.text = operators[key]?.OperatorNose.toString()
                         _op1.IP.text = operators[key]?.OperatorIP
                         _op1.Port.text = operators[key]?.OperatorPort
                         _op1.Name.text = operators[key]?.OperatorName
