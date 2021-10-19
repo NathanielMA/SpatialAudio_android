@@ -231,7 +231,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="36dp"
         android:layout_marginTop="16dp"
-        android:text="@string/active"
+        android:text="@string/Name"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView7"
@@ -283,7 +283,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="20dp"
         android:layout_marginEnd="144dp"
-        android:text="@string/active"
+        android:text="@string/Name"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/textView13"
@@ -350,7 +350,7 @@
         app:layout_constraintTop_toBottomOf="@+id/Op_1_Lat" />
 
     <TextView
-        android:id="@+id/Op_1_active"
+        android:id="@+id/Op_1_Name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
@@ -410,7 +410,7 @@
         app:layout_constraintTop_toBottomOf="@+id/Op_2_Lat" />
 
     <TextView
-        android:id="@+id/Op_2_active"
+        android:id="@+id/Op_2_Name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
