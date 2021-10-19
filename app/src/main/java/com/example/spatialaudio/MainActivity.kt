@@ -685,22 +685,8 @@ class MainActivity : AppCompatActivity() {
 
                                             addresses.add(opIP.toString())                  // Add IP to addresses set
 //                                        notifyMe()
+                                            AsynchRandomTaskTimer()
                                         }
-
-                                        /* Determine whether to take initial Port
-                                     * Will only be used if port initial Port has left server and removed from portsAudio set
-                                     */
-                                        if (!portsAudio.contains(portAudio.toString()) && !selfAdded) {
-                                            portsAudio.add(portAudio.toString())
-                                            _self.OperatorPort = portAudio.toString()
-                                            allocatePort(
-                                                hostAdd.toString(),
-                                                portAudio.toString()
-
-                                            )
-                                            selfAdded = true
-                                        }
-
                                     } catch (e: BindException) { // Catch a Bind exception if portAudio is already bound
 
                                     }
@@ -722,9 +708,19 @@ class MainActivity : AppCompatActivity() {
                                      */
                                     val portsInUse = portsAudio.toList()
                                     if (!selfAdded) {
-
-                                        Thread.sleep(100)
-                                        AsynchRandomTaskTimer()
+                                        if (portsAudio.contains(portAudio.toString()) && !selfAdded) {
+                                            for (i in 0 until portsAudio.size) {
+                                                if (portsAudio.contains(portAudio.toString())) {
+                                                    portAudio += 1
+                                                } else if ((portAudio - incPort) >= 8){
+                                                    break
+                                                }
+                                            }
+                                            portsAudio.add(portAudio.toString())
+                                            _self.OperatorPort = portAudio.toString()
+                                            allocatePort(hostAdd.toString(), portAudio.toString())
+                                            selfAdded = true
+                                        }
 
                                     } else if (operators.size < portsAudio.size && selfAdded) {
                                         for (i in 0 until portsAudio.size) {
@@ -758,7 +754,10 @@ class MainActivity : AppCompatActivity() {
 
                     val myData = getData(_self, IMUSocket)
                     _self.activeTime += 1
-                    allocateCoords(7777.toString(), myData[0], myData[1], myData[2])
+
+                    if(portAudio.toString() == _self.OperatorPort) {
+                        allocateCoords(portAudio.toString(), myData[0], myData[1], myData[2])
+                    }
                     val dataString2 = "OP-DATA: IP: $hostAdd PORT_AUDIO: $portAudio COORDS: $myData--"
 
                     val datagramPacket = DatagramPacket(
@@ -877,33 +876,32 @@ class MainActivity : AppCompatActivity() {
             }
             private fun updateTextView3(_op1: troubleshoot, _op2: troubleshoot) {
                 runOnUiThread {
-                    _op1.Op.text = "Self"
-                    _op1.Longitude.text = operators["OP1"]?.OperatorLongitude.toString()
-                    _op1.Latitude.text = operators["OP1"]?.OperatorLatitude.toString()
-                    _op1.Nose.text = operators["OP1"]?.OperatorNose.toString()
-                    _op1.IP.text = operators["OP1"]?.OperatorIP.toString()
-                    _op1.Port.text = operators["OP1"]?.OperatorPort.toString()
-                    _op1.Name.text = operators["OP1"]?.OperatorName.toString()
-//                for (key in operators.keys) {
-//                    if(operators[key]?.OperatorIP == _self.OperatorIP) {
-//                        _op1.Op.text = "Self"
-//                        _op1.Longitude.text = portsAudio.toList()[0]
-//                        _op1.Latitude.text = portsAudio.size.toString()
-//                        _op1.Nose.text = operators[key]?.OperatorNose.toString()
-//                        _op1.IP.text = operators[key]?.OperatorIP
-//                        _op1.Port.text = operators[key]?.OperatorPort
-//                        _op1.Name.text = addresses.toList()[0]
-//                    }
-                    //                    else if (operators[key]?.OperatorIP != _self.OperatorIP){
-//                        _op2.Op.text = "Operator 2"
-//                        _op2.Longitude.text = operators[key]?.OperatorLongitude.toString()
-//                        _op2.Latitude.text = operators[key]?.OperatorLatitude.toString()
-//                        _op2.Nose.text = operators[key]?.OperatorNose.toString()
-//                        _op2.IP.text = operators[key]?.OperatorIP
-//                        _op2.Port.text = operators[key]?.OperatorPort
-//                        _op2.Name.text = operators[key]?.isActive.toString()
-//                    }
-//                }
+//                    _op1.Op.text = "Self"
+//                    _op1.Longitude.text = operators["OP2"]?.OperatorLongitude.toString()
+//                    _op1.Latitude.text = operators["OP2"]?.OperatorLatitude.toString()
+//                    _op1.Nose.text = operators["OP2"]?.OperatorNose.toString()
+//                    _op1.IP.text = operators["OP2"]?.OperatorIP.toString()
+//                    _op1.Port.text = operators["OP2"]?.OperatorPort.toString()
+//                    _op1.Name.text = portsAudio.toString()
+                for (key in operators.keys) {
+                    if(operators[key]?.OperatorIP == _self.OperatorIP) {
+                        _op1.Op.text = "Self"
+                        _op1.Longitude.text = operators[key]?.OperatorLongitude.toString()
+                        _op1.Latitude.text = operators[key]?.OperatorLatitude.toString()
+                        _op1.Nose.text = operators[key]?.OperatorNose.toString()
+                        _op1.IP.text = operators[key]?.OperatorIP
+                        _op1.Port.text = operators[key]?.OperatorPort
+                        _op1.Name.text = operators[key]?.OperatorName
+                    } else if (operators[key]?.OperatorIP != _self.OperatorIP){
+                        _op2.Op.text = "Operator 2"
+                        _op2.Longitude.text = operators[key]?.OperatorLongitude.toString()
+                        _op2.Latitude.text = operators[key]?.OperatorLatitude.toString()
+                        _op2.Nose.text = operators[key]?.OperatorNose.toString()
+                        _op2.IP.text = operators[key]?.OperatorIP
+                        _op2.Port.text = operators[key]?.OperatorPort
+                        _op2.Name.text = operators[key]?.OperatorName
+                    }
+                }
                 }
             }
         }
