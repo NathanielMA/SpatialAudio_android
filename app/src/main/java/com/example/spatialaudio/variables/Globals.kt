@@ -95,13 +95,50 @@ var operators = mutableMapOf<String, opInfo>()
 val potentialOP = listOf<String>("OP1","OP2","OP3","OP4","OP5","OP6","OP7","OP8")
 
 var azimuthData = arrayOf<String>("","","","","","")
+
+/**
+ * Longitude
+ */
 var Longitude: Double = 0.0
+
+/**
+ * Latitude
+ */
 var Latitude: Double = 0.0
+
+/**
+ * Nose: Forward facing direction of device
+ */
 var Nose: Double = 0.0
+
 var tcanc = 0
+
+/**
+ * Multicast port
+ */
 var multiCastPort: String = "0"
+
+/**
+ * Data string that stores received OPS over multicast
+ */
 var receiverDataString: String = ""
+
+/**
+ * Data string that store GPS DATA from OPS over multicast
+ */
 var opDataDataString: String = ""
+
+/**
+ * 200 millisecond update rate
+ */
 var updateRate = 200L
+
+/**
+ * Stores own GPS data [Longitude, Latitude, Nose]
+ */
 var myData = listOf<Double>(0.0, 0.0, 0.0)
+
+/**
+ * Own data class
+ */
 lateinit var self: opInfo
