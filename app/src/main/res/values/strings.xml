@@ -8,7 +8,7 @@
     <string name="hide_IP_button">Hide IP</string>
     <string name="hidden">hidden</string>
     <string name="audio_Port">Port: </string>
-    <string name="audio_Port_connection">Enter a desired port</string>
+    <string name="multicast_Port_connection">multicast port</string>
     <string name="IMUDATA">0</string>
     <string name="ENTER">Enter</string>
     <string name="Longitude">Longitude:</string>
