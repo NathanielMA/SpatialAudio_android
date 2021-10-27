@@ -1,5 +1,11 @@
 package com.example.spatialaudio
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.AudioRecord.getMinBufferSize
+import android.media.MediaRecorder
 import android.os.Bundle
 import com.google.android.material.snackbar.Snackbar
 import androidx.appcompat.app.AppCompatActivity
@@ -9,6 +15,7 @@ import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
 import android.view.Menu
 import android.view.MenuItem
+import androidx.core.app.ActivityCompat
 import com.example.spatialaudio.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
@@ -18,6 +25,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        ActivityCompat.requestPermissions(this,
+            arrayOf("Manifest.permission.RECORD_AUDIO"), PackageManager.PERMISSION_GRANTED)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)

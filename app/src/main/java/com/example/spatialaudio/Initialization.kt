@@ -1,24 +1,30 @@
 package com.example.spatialaudio
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.net.wifi.WifiManager
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.text.format.Formatter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.example.spatialaudio.dataClass.opInfo
 import com.example.spatialaudio.dataClass.troubleshoot
 import com.example.spatialaudio.databinding.InitializationBinding
 import com.example.spatialaudio.functions.initializeSelf
-import com.example.spatialaudio.threading.ReceiveOperatorData
-import com.example.spatialaudio.threading.ReceiveRequest
-import com.example.spatialaudio.threading.SendMyData
-import com.example.spatialaudio.threading.SendRequest
+import com.example.spatialaudio.threading.*
 import com.example.spatialaudio.variables.*
+import java.net.DatagramSocket
 import java.net.InetSocketAddress
 import java.net.MulticastSocket
 
@@ -27,14 +33,14 @@ class Initialization : Fragment() {
     private var _binding: InitializationBinding? = null
 
     private val binding get() = _binding!!
+    lateinit var wifiManager: WifiManager
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         _binding = InitializationBinding.inflate(inflater, container, false)
-
-        val wifiManager = activity?.applicationContext?.getSystemService(AppCompatActivity.WIFI_SERVICE) as WifiManager
+        wifiManager = activity?.applicationContext?.getSystemService(AppCompatActivity.WIFI_SERVICE) as WifiManager
         hostAdd = Formatter.formatIpAddress(wifiManager.connectionInfo.ipAddress)
 
         self = initializeSelf.self()
@@ -122,21 +128,36 @@ class Initialization : Fragment() {
         val SendMYDATA = Thread(SendMyData())
         val ReceiveREQUEST = Thread(ReceiveRequest())
         val SendREQUEST = Thread(SendRequest())
+        val ReceiveAudio = Thread(ReceiveAudio())
+        val SendAudio = Thread(SendAudio())
+
+        for (i in 0 until 8) {
+            socketRecAudio.add(DatagramSocket(incPort + i))
+        }
 
         multiCastPort = binding.audioPortEditText.text.toString()
         binding.audioPortTextView.text = multiCastPort
+
+        val multicastLock = wifiManager.createMulticastLock("testapp")
+        multicastLock.setReferenceCounted(true)
+        multicastLock.acquire()
         socketMultiConnect = MulticastSocket(multiCastPort.toInt())
         socketMultiConnect.joinGroup(InetSocketAddress("230.0.0.0", multiCastPort.toInt()), null)
 
         if(multiCastPort.toInt() > 0) {
             updateTextView_MYDATA()
-//          updateTextView_OPDATA()
             updateTextView_RECMESSAGE()
 
             SendMYDATA.start()
             ReceiveOPDATA.start()
             ReceiveREQUEST.start()
             SendREQUEST.start()
+
+//            if (selfAdded){
+//                ReceiveAudio.start()
+//                SendAudio.start()
+//            }
+
         }
     }
 

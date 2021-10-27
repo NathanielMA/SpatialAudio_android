@@ -1,5 +1,6 @@
 package com.example.spatialaudio.threading
 
+import com.example.spatialaudio.dataStringsend
 import com.example.spatialaudio.variables.*
 import com.example.spatialaudio.functions.PortAllocation.allocatePort
 import java.net.DatagramPacket
@@ -11,16 +12,15 @@ class SendRequest: Thread() {
             // Initialize first operator (self) on server
             sleep(1000)
             if (timeOutOp) {
-                sleep(1000)
                 if (addresses.size == 1 && addresses.contains(self.OperatorIP)) {
                     /** Send own information over server
                      * This is used until at least one operator joins
                      */
-                    val dataString = "OP REQUEST: IP: $hostAdd PORT_AUDIO: $portAudio"
+                    dataStringsend = "OP REQUEST: IP: $hostAdd PORT_AUDIO: $portAudio"
 
                     val datagramPacket = DatagramPacket(
-                        dataString.toByteArray(),
-                        dataString.toByteArray().size,
+                        dataStringsend.toByteArray(),
+                        dataStringsend.toByteArray().size,
                         InetAddress.getByName("230.0.0.0"),
                         multiCastPort.toInt()
                     )
@@ -39,11 +39,11 @@ class SendRequest: Thread() {
                 /** Send all operator information over server
                  * This is used until all operators leave the server
                  */
-                val dataString =
+                dataStringsend =
                     "OP REQUEST: IP: $hostAdd PORT_AUDIO: $portAudio PORTS_CONNECTED: $portsAudio"
                 val datagramPacket = DatagramPacket(
-                    dataString.toByteArray(),
-                    dataString.toByteArray().size,
+                    dataStringsend.toByteArray(),
+                    dataStringsend.toByteArray().size,
                     InetAddress.getByName("230.0.0.0"),
                     multiCastPort.toInt()
                 )

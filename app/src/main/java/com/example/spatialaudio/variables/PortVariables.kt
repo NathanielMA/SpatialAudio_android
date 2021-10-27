@@ -6,7 +6,7 @@ import java.net.MulticastSocket
 /**
  * Hyper IMU socket
  */
-var IMUSocket: DatagramSocket = DatagramSocket(9001)
+var IMUSocket: DatagramSocket = DatagramSocket(9002)
 
 /**
  *  Multicast Socket on port 8010

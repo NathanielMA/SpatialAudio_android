@@ -1,5 +1,7 @@
 package com.example.spatialaudio.threading
 
+import com.example.spatialaudio.functions.NoNewOp.mTimer
+import com.example.spatialaudio.functions.AudioPortAssign.assignPort as assign
 import com.example.spatialaudio.variables.*
 import com.example.spatialaudio.functions.PortAllocation.allocatePort
 import com.example.spatialaudio.functions.PortRemoval.removePort
@@ -12,6 +14,8 @@ import java.net.DatagramPacket
 class ReceiveRequest : Thread() {
     override fun run() {
         while (true) {
+            sleep(200)
+
             if (!opDetected && !selfAdded || selfAdded && !timeOutOp) {
                 sleep(100)
                 timeOut()
@@ -24,19 +28,22 @@ class ReceiveRequest : Thread() {
 
             val data = response.data
             val dataString = String(data, 0, data.size)
-
+            receiverDataString = dataString
             val sample = arrayOf<String>("", "", "", "")
 
             when {
                 """OP REQUEST: """.toRegex()
                     .containsMatchIn(dataString) -> {
-                    receiverDataString = dataString
+                    if(!timeOutOp) {
+                        mTimer.cancel()
+                    }
                     /* Variables used to store and recognize parsed data from received packets
                      * Variables will Regex:
                      *      operator IP, Name, Port and total Ports on server
                      */
                     val opIP =
-                        """(\d+)\.(\d+)\.(\d+)\.(\d+)""".toRegex().find(receiverDataString)?.value
+                        """(?<=IP: )(\d+)\.(\d+)\.(\d+)\.(\d+)""".toRegex().find(dataString)?.value
+
                     if (opIP != self.OperatorIP) {
                         val opPort = """(?<=PORT_AUDIO: )\d*""".toRegex()
                             .find(receiverDataString)?.value.toString()
@@ -89,27 +96,7 @@ class ReceiveRequest : Thread() {
                              *          Compare existing ports to current operators.
                              *          Remove extra port.
                              */
-                            val portsInUse = portsAudio.toList()
-                            if (!selfAdded) {
-                                if (portsAudio.contains(portAudio.toString()) && !selfAdded) {
-                                    for (i in 0 until portsAudio.size) {
-                                        if (portsAudio.contains(portAudio.toString())) {
-                                            portAudio += 1
-                                        } else if ((portAudio - incPort) >= 8){
-                                            break
-                                        }
-                                    }
-                                    portsAudio.add(portAudio.toString())
-                                    self.OperatorPort = portAudio.toString()
-                                    allocatePort(hostAdd.toString(), portAudio.toString())
-                                    selfAdded = true
-                                }
-
-                            } else if (operators.size < portsAudio.size && selfAdded) {
-                                for (i in 0 until portsAudio.size) {
-                                    removePort(portsInUse[i])
-                                }
-                            }
+                            assign()
                         }
                         opDetected = true
                         timeOutOp = false
